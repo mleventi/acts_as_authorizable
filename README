@@ -1,0 +1,46 @@
+=ActsAsAuthorizable
+
+Acts As Authorizable is a solution for providing pseudo-hierarchical role based authorizations on ActiveRecord model instances using your existing database table relationships. In a nutshell you could do the following.
+
+  Charles becomes a moderator for the Technical Support forum.
+  As moderator of the forum he has permissions to delete threads and edit and delete posts within threads.
+  
+Hence a Post model instance belongs_to a Thread model instance belongs_to a Forum model instance. You can call post_instance.authorized?(user_instance,permission), and the plugin will fetch the authorization on the post_instance due to the fact that it indirectly belongs to the forum. This eliminates the need to use deep nesting in controllers because of permission reasons.
+
+==Example
+
+==Installation
+
+==Usage
+
+Acts As Authorizable works within your models by piggybacking on your has_many, has_one, and belongs_to associations to create a node graph of model instances. For each ActiveRecord class you define which associations could yield permissions on the current class.
+
+===Class Methods
+
+====acts_as_authorized
+
+This is included in ActiveRecord models that are part of the authorization graph. If you use any of the other class methods this needs to be included in your class definition.
+
+====auth_belongs_to_user
+
+This method takes several options...
+
+- :association: What association to use to fetch the user instance, defaults to :user
+- :role_association: What association defines the role for the corresponding user instance
+- :role: What the user instance should be treated as assuming the :role_association option is not defined
+
+====auth_belongs_to_parent
+
+This method requires an association option
+
+- :association
+
+
+More Coming shortly...
+
+
+
+
+
+
+Copyright (c) 2008 Matthew Leventi, released under the MIT license
