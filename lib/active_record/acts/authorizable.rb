@@ -5,36 +5,41 @@ module ActiveRecord
         base.extend(SingletonMethods)
       end
       module SingletonMethods
+        #Signals that the model has some authorization information. Sets up the acts_as_authorizable_sources array.
         def acts_as_authorizable(options={})
           write_inheritable_attribute :acts_as_authorizable_sources, []
           class_inheritable_reader :acts_as_authorizable_sources
           extend ClassMethods
           include InstanceMethods
         end
-
-        def auth_belongs_to_user(options = {})
-          conf = {:role => nil, :association => :user, :role_association => nil}
+        
+        #Piggybacks an existing association to a user to look for permissions. Optionally takes either a hard-code role or a role association.
+        def auth_belongs_to_user(assoc,options = {})
+          conf = {:role => nil, :association => assoc, :role_association => nil}
           conf.update(options)
           raise 'Need a role or role_association option for belongs_to_user' if conf[:role].nil? && conf[:role_association].nil?
           raise 'Cannot have both a role and a role_association for belongs_to_user' if !conf[:role].nil? && !conf[:role_association].nil?
           conf[:type] = :belongs_to_user
           acts_as_authorizable_sources << conf
         end
-
-        def auth_belongs_to_parent(options = {})
-          conf = {:association => nil}
+        
+        #Piggybacks an existing belongs_to association to look for permissions.
+        def auth_belongs_to_parent(assoc,options = {})
+          conf = {:association => assoc}
           conf.update(options)
           raise 'Need a parent association for has_many_parents' if conf[:association].nil?
           conf[:type] = :belongs_to_parent
           acts_as_authorizable_sources << conf
         end
         
-        def auth_has_one_parent(options = {})
-          auth_belongs_to_parent(options)
+        #Piggybacks an existing has_one association to look for permissions.
+        def auth_has_one_parent(assoc,options = {})
+          auth_belongs_to_parent(assoc,options)
         end
-
-        def auth_has_many_parents(options = {})
-          conf = {:association => nil, :user_scope => nil}
+        
+        #Piggybacks an existing has_many association to look for permissions. Optionally takes a scope which takes the user object as a parameter which weeds the has_many association. 
+        def auth_has_many_parents(assoc,options = {})
+          conf = {:association => assoc, :user_scope => nil}
           conf.update(options)
           raise 'Need a parent association for has_many_parents' if conf[:association].nil?
           conf[:type] = :has_many_parents
@@ -44,6 +49,7 @@ module ActiveRecord
       module ClassMethods
       end
       module InstanceMethods
+        #Determines if a user has the permission on the current model
         def authorized?(user,permission,excludes=[])
           return false if excludes.include?(self)
           excludes << self
