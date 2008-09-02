@@ -1,21 +1,102 @@
-ActsAsAuthorizable
+=ActsAsAuthorizable
 
-=hello
+Acts As Authorizable is a solution for providing pseudo-hierarchical role based authorizations on ActiveRecord model instances using your existing database table relationships. It is designed to eliminate the need for deep nesting controllers due to authorization.
 
-Acts As Authorizable is a solution for providing pseudo-hierarchical role based authorizations on ActiveRecord model instances using your existing database table relationships. In a nutshell you could do the following.
+==Deep Nesting & Authorization
 
-  Charles becomes a moderator for the Technical Support forum.
-  As moderator of the forum he has permissions to delete threads and edit and delete posts within threads.
+One reason why developers deeply nest controllers is to allow hierarchical permission. Hence you see the following...
+
+  example.com/forums/forum_id/threads/thread_id/posts/post_id/edit
   
-Hence a Post model instance belongs_to a Thread model instance belongs_to a Forum model instance. You can call post_instance.authorized?(user_instance,permission), and the plugin will fetch the authorization on the post_instance due to the fact that it indirectly belongs to the forum. This eliminates the need to use deep nesting in controllers because of permission reasons.
+With deep nesting you can check a current user's permissions against the post,thread, and forum. So a moderator for a specific form instance would be able to modify a post using the permissions present on the forum instance. Yet this is no longer possible with...
 
-==Example
+  example.com/posts/post_id/edit
+  
+This is due to the fact that we don't have explicit information about where the post falls in an authorization hierarchy. This is where ActsAsAuthorizable provides an improvement. With the plugin you can specify where to go to get further authorization information on a post. So the forum moderator could access the page, even though he doesn't have direct permissions on the post.  
 
 ==Installation
 
+  script/plugin install git://github.com/mleventi/acts_as_authorizable.git
+
 ==Usage
 
-Acts As Authorizable works within your models by piggybacking on your has_many, has_one, and belongs_to associations to create a node graph of model instances. For each ActiveRecord class you define which associations could yield permissions on the current class.
+Acts As Authorizable works within your models by piggybacking on your has_many, has_one, and belongs_to associations to create a graph of model instances that represents authorization inheritance routes. For each ActiveRecord class you define which associations could yield permissions on the current class.
+
+===Prerequisites
+
+You need a model which most likely would be a Role. It has to have an instance method "allows?" that takes in a permission object and returns a boolean. Two examples below are fine...
+
+  #Ex1
+  class Role < ActiveRecord::Base
+    def allows?(permission)
+      #do something and return true or false
+    end
+  end
+  
+  #Ex2
+  class Moo < ActiveRecord::Base
+    def allows?(permission)
+      #do something and return true or false
+    end
+  end
+  
+The permission parameter is a black box. It can be anything because ActsAsAuthorizable doesn't use it, just passes it around. You also need a ActiveRecord model that represents a user. 
+
+===Example
+
+  #ForumMembership, holds how the user is related to a forum
+  class ForumMemberships < ActiveRecord::Base
+    acts_as_authorizable
+    
+    belongs_to :user
+    belongs_to :forum
+    belongs_to :role
+    
+    named_scope :with_user, lambda { |user| {:conditions => {:user_id => user}}}
+    
+    auth_belongs_to_user :user, :role_association => :role
+  end 
+  
+  #Forum
+  class Forum < ActiveRecord::Base
+    acts_as_authorizable
+    
+    has_many :forum_memberships
+    has_many :threads
+    
+    auth_has_many_parents :forum_memberships, :user_scope => :with_user
+  end
+  
+  #Thread
+  class Forum < ActiveRecord::Base
+    acts_as_authorizable
+    
+    belongs_to :forum
+    has_many :posts
+    
+    auth_belongs_to_parent :forum
+  end
+  
+  #Post
+  class Post < ActiveRecord::Base
+    acts_as_authorizable
+    
+    belongs_to :forum
+    belongs_to :user
+    
+    auth_belongs_to_user :user, :role => Role.find_by_name('Post Owner')
+    auth_belongs_to_parent :thread
+  end
+  
+So the following models represent an authorization hierarchy. The ForumMembership model should allow authorizations for the particular Forum, Thread, & Post. Also the user association on a post, should allow some authorizations for that particular post.
+
+Each of the four classes gets an injected authorized? instance method.
+  
+  model_instance.authorized?(user_instance,permission)
+  
+Now if you want to find out if a user has a permission on a certain post you simply call the post's authorized? method. This call uses the auth_* methods to load in additional models until the permission is found or we have looked through the associations.
+
+Note: models are searched in depth first order, with the order within a model determined lexically by how auth_* are called. Hence you almost always want to have auth_belongs_to_user calls first. Then scoped auth_has_many_parents, auth_belongs_to_parent, and finallly not-scoped, auth_belongs_to_parent.
 
 ===Class Methods
 
