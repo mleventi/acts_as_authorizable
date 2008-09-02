@@ -1,4 +1,6 @@
-=ActsAsAuthorizable
+ActsAsAuthorizable
+
+=hello
 
 Acts As Authorizable is a solution for providing pseudo-hierarchical role based authorizations on ActiveRecord model instances using your existing database table relationships. In a nutshell you could do the following.
 
