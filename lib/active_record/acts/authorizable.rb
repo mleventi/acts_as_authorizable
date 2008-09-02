@@ -7,6 +7,8 @@ module ActiveRecord
       module SingletonMethods
         #Signals that the model has some authorization information. Sets up the acts_as_authorizable_sources array.
         def acts_as_authorizable(options={})
+          conf = {:role_class_name => 'Role'}
+          conf.update(options)
           write_inheritable_attribute :acts_as_authorizable_sources, []
           class_inheritable_reader :acts_as_authorizable_sources
           extend ClassMethods
