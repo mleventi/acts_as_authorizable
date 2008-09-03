@@ -7,10 +7,12 @@ module ActiveRecord
       module SingletonMethods
         #Signals that the model has some authorization information. Sets up the acts_as_authorizable_sources array.
         def acts_as_authorizable(options={})
-          conf = {:role_class_name => 'Role'}
+          conf = {:role_class_name => 'Role',:role_locate_method => 'locate'}
           conf.update(options)
           write_inheritable_attribute :acts_as_authorizable_sources, []
           class_inheritable_reader :acts_as_authorizable_sources
+          wite_inheritable_attribute :acts_as_authorizable_options, conf
+          class_inheritable_reader :acts_as_authorizable_options
           extend ClassMethods
           include InstanceMethods
         end
@@ -51,169 +53,68 @@ module ActiveRecord
       module ClassMethods
       end
       module InstanceMethods
-        #Determines if a user has the permission on the current model
+        
+        #Determines if a user has the permission on the current model instance
         def authorized?(user,permission,excludes=[])
           return false if excludes.include?(self)
           excludes << self
-          raise 'No authorizable sources' if acts_as_authorizable_sources.empty?
+          auth_check_sources!
           acts_as_authorizable_sources.each do |source|
             case source[:type]
             when :belongs_to_user
-              assoc = source[:association]
-              if self.send(assoc) == user
-                role_assoc = source[:role_association]
-                if role_assoc.nil?
-                  assoc_object = Role.locate(source[:role])
-                  return true if !assoc_object.nil && assoc_object.allows?(permission)
-                else
-                  assoc_object = self.send(role_assoc)
-                  return true if !assoc_object.nil? && assoc_object.allows?(permission)
-                end
-              end
+              return true unless auth_using_belongs_to_user(source,user,permission).nil?
             when :belongs_to_parent
-              assoc = source[:association]
-              assoc_object = self.send(assoc)
+              assoc_object = self.send(source[:association])
               return true if !assoc_object.nil? && assoc_object.authorized?(user,permission,excludes)
             when :has_many_parents
-              assoc = source[:association]
-              if source[:user_scope].nil?
-                parents = self.send(assoc)
-              else
-                user_scope = source[:user_scope]
-                parents = self.send(assoc).send(user_scope,user)
-              end
-              parents.each do |parent|
+              auth_assoc_using_has_many_parents(source).each do |parent|
                 return true if parent.authorized?(user,permission,excludes)
               end
             end
           end
           return false
         end
-        def authorized_by(user,permission,excludes=[])
-          return [] if excludes.include?(self)
+        
+        protected
+        
+        #Checks that there is a source
+        def auth_check_sources!
           raise 'No authorizable sources' if acts_as_authorizable_sources.empty?
-          roles = []
-          acts_as_authorizable_sources.each do |source|
-            case source[:type]
-            when :belongs_to_user
-              assoc = source[:association]
-              if self.send(assoc) == user
-                role_assoc = source[:role_association]
-                if role_assoc.nil?
-                  assoc_object = Role.locate(source[:role])
-                  roles << assoc_object if !assoc_object.nil && assoc_object.allows?(permission)
-                else
-                  assoc_object = self.send(role_assoc)
-                  roles << assoc_object if !assoc_object.nil? && assoc_object.allows?(permission)
-                end
-              end
-            when :belongs_to_parent
-              assoc = source[:association]
-              assoc_object = self.send(assoc)
-              roles.concat(assoc_object.authorized_by(user,permission,excludes)) if !assoc_object.nil? 
-            when :has_many_parents
-              assoc = source[:association]
-              if source[:user_scope].nil?
-                parents = self.send(assoc)
-              else
-                user_scope = source[:user_scope]
-                parents = self.send(assoc).send(user_scope,user)
-              end
-              parents.each do |parent|
-                roles.concat(parent.authorized_by(user,permission,excludes))
-              end
-            end
-          end
-          return roles.uniq
         end
         
-        def authorized_by_paths(user,permission,path=[],excludes=[])
-          return [] if excludes.include?(self)
-          raise 'No authorizable sources' if acts_as_authorizable_sources.empty?
-          auth_info = []
-          acts_as_authorizable_sources.each do |source|
-            case source[:type]
-            when :belongs_to_user
-              assoc = source[:association]
-              if self.send(assoc) == user
-                role_assoc = source[:role_association]
-                if role_assoc.nil?
-                  assoc_object = Role.locate(source[:role])
-                  if !assoc_object.nil && assoc_object.allows?(permission)
-                    p = path.clone
-                    p << self
-                    auth_info << {:path => p, :role => assoc_object }
-                  end 
-                else
-                  assoc_object = self.send(role_assoc)
-                  if !assoc_object.nil? && assoc_object.allows?(permission)
-                    p = path.clone
-                    p << self
-                    auth_info << {:path => p, :role => assoc_object }
-                  end
-                end
-              end
-            when :belongs_to_parent
-              assoc = source[:association]
-              assoc_object = self.send(assoc)
-              if !assoc_object.nil? 
-                p = path.clone
-                p << self
-                auth_info.concat(assoc_object.authorized_by(user,permission,p,excludes))
-              end
-            when :has_many_parents
-              assoc = source[:association]
-              if source[:user_scope].nil?
-                parents = self.send(assoc)
-              else
-                user_scope = source[:user_scope]
-                parents = self.send(assoc).send(user_scope,user)
-              end
-              parents.each do |parent|
-                p = path.clone
-                p << self
-                auth_info.concat(parent.authorized_by(user,permission,p,excludes))
-              end
+        #Returns nil, or the role object representing the authorization from a belongs_to_user source
+        def auth_using_belongs_to_user(source,user,permission)
+          if auth_user_association_matches?(source[:association],user)
+            if source[:role_association].nil?
+              role_object = auth_locate_role_object(source[:role])
+            else
+              role_object = self.send(source[:role_association])
             end
+            return role_object if !role_object.nil? && role_object.allows?(permission)
           end
+          return nil
         end
         
-        def authorizations(user,excludes=[])
-          return [] if excludes.include?(self)
-          raise 'No authorizable sources' if acts_as_authorizable_sources.empty?
-          roles = []
-          acts_as_authorizable_sources.each do |source|
-            case source[:type]
-            when :belongs_to_user
-              assoc = source[:association]
-              if self.send(assoc) == user
-                role_assoc = source[:role_association]
-                if role_assoc.nil?
-                  assoc_object = Role.locate(source[:role])
-                  roles << assoc_object if !assoc_object.nil?
-                else
-                  assoc_object = self.send(role_assoc)
-                  roles << assoc_object if !assoc_object.nil?
-                end
-              end
-            when :belongs_to_parent
-              assoc = source[:association]
-              assoc_object = self.send(assoc)
-              roles.concat(assoc_object.authorizations(user,excludes)) if !assoc_object.nil? 
-            when :has_many_parents
-              assoc = source[:association]
-              if source[:user_scope].nil?
-                parents = self.send(assoc)
-              else
-                user_scope = source[:user_scope]
-                parents = self.send(assoc).send(user_scope,user)
-              end
-              parents.each do |parent|
-                roles.concat(parent.authorizations(user,excludes))
-              end
-            end
+        #Returns the association built from a auth_has_many_parents
+        def auth_assoc_using_has_many_parents(source)
+          assoc = source[:association]
+          if source[:user_scope].nil?
+            parents = self.send(assoc)
+          else
+            user_scope = source[:user_scope]
+            parents = self.send(assoc).send(user_scope,user)
           end
-          return roles.uniq
+          return parents
+        end
+        
+        #Determines if the user_association matches a given user
+        def auth_user_association_matches?(assoc,user)
+          return self.send(assoc) == user
+        end
+        
+        #Locates a role based on :role_class_name and :role_locate_method options
+        def auth_locate_role_object(role)
+          return acts_as_authorizable_options[:role_class_name].constantize.send(acts_as_authorizable_options[:role_locate_method],role)
         end
       end
     end
