@@ -7,16 +7,17 @@ module ActiveRecord
       module SingletonMethods
         #Signals that the model has some authorization information. Sets up the acts_as_authorizable_sources array.
         def acts_as_authorizable(options={})
-          conf = {:role_class_name => 'Role',:role_locate_method => 'locate'}
+          conf = {:role_class_name => 'Role',:role_locate_method => 'find_by_name'}
           conf.update(options)
           write_inheritable_attribute :acts_as_authorizable_sources, []
           class_inheritable_reader :acts_as_authorizable_sources
-          wite_inheritable_attribute :acts_as_authorizable_options, conf
+          write_inheritable_attribute :acts_as_authorizable_options, conf
           class_inheritable_reader :acts_as_authorizable_options
-          extend ClassMethods
+          extend AuthSingletonMethods
           include InstanceMethods
         end
-        
+      end
+      module AuthSingletonMethods
         #Piggybacks an existing association to a user to look for permissions. Optionally takes either a hard-code role or a role association.
         def auth_belongs_to_user(assoc,options = {})
           conf = {:role => nil, :association => assoc, :role_association => nil}
@@ -50,8 +51,6 @@ module ActiveRecord
           acts_as_authorizable_sources << conf
         end
       end
-      module ClassMethods
-      end
       module InstanceMethods
         
         #Determines if a user has the permission on the current model instance
@@ -67,7 +66,7 @@ module ActiveRecord
               assoc_object = self.send(source[:association])
               return true if !assoc_object.nil? && assoc_object.authorized?(user,permission,excludes)
             when :has_many_parents
-              auth_assoc_using_has_many_parents(source).each do |parent|
+              auth_assoc_using_has_many_parents(source,user).each do |parent|
                 return true if parent.authorized?(user,permission,excludes)
               end
             end
@@ -96,7 +95,7 @@ module ActiveRecord
         end
         
         #Returns the association built from a auth_has_many_parents
-        def auth_assoc_using_has_many_parents(source)
+        def auth_assoc_using_has_many_parents(source,user)
           assoc = source[:association]
           if source[:user_scope].nil?
             parents = self.send(assoc)

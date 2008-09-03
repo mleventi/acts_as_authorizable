@@ -1,0 +1,21 @@
+forum_moderator:
+  name: Forum Moderator
+  permissions: moderate, view
+
+forum_viewer:
+  name: Forum Viewer
+  permissions: view
+  
+thread_moderator:
+  name: Thread Moderator
+  permissions: moderate
+
+post_owner:
+  name: Post Owner
+  permissions: owns
+  
+
+  
+
+  
+

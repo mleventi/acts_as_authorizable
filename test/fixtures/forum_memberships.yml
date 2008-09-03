@@ -1,0 +1,16 @@
+matt_support_owner:
+  forum: support
+  role: forum_moderator
+  user: matt
+
+dave_support_viewer:
+  forum: support
+  role: forum_viewer
+  user: dave
+  
+charles_support_viewer:
+  forum: support
+  role: forum_viewer
+  user: charles
+  
+  
