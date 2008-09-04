@@ -1,4 +1,5 @@
 support_thread_a:
   name: Thread A
   moderator: charles
+  forum: support
   

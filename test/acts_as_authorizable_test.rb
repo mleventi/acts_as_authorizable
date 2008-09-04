@@ -84,7 +84,24 @@ class ActsAsAuthorizableTest < Test::Unit::TestCase
     assert_nil p.send('auth_using_belongs_to_user',Post.acts_as_authorizable_sources.first,u,'ow2ns')
   end
   
+  #Tests a direct authorization using a belongs_to_user
+  def test_direct_authorization
+    u = User.find_by_name('Matt')
+    m = u.forum_memberships.first
+    assert m.authorized?(u,'moderate')
+  end
   
+  #Tests a indirect authorization using a belongs_to_parent scoped
+  def test_indirect_authorization
+    u = User.find_by_name('Matt')
+    f = u.forum_memberships.first.forum
+    assert f.authorized?(u,'moderate')
+  end
   
-  
+  #Tests a long authorization using two hops with other branches
+  def test_very_indirect_authorization
+    u = User.find_by_name('Matt')
+    t = u.forum_memberships.first.forum.forum_threads.first
+    assert t.authorized?(u,'moderate') 
+  end
 end
