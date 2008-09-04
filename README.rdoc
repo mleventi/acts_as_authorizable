@@ -1,6 +1,6 @@
 =ActsAsAuthorizable
 
-Acts As Authorizable is a solution for providing pseudo-hierarchical role based authorizations on ActiveRecord model instances using your existing database table relationships. It is designed to eliminate the need for deep nesting controllers due to authorization.
+Acts As Authorizable is a part solution for providing pseudo-hierarchical role based authorizations on ActiveRecord model instances using your existing database table relationships. It is designed to eliminate the need for deep nesting controllers due to authorization. That being said, it is only part of a total authorization mechanism. Essentially it takes an authorized? call and passes it to the appropriate Role.allows? methods. You still have to define filters in controllers that call ActiveRecord models authorized? method and write the allows? method in your role class.  
 
 ==Deep Nesting & Authorization
 
@@ -17,6 +17,8 @@ This is due to the fact that we don't have explicit information about where the 
 ==Installation
 
   script/plugin install git://github.com/mleventi/acts_as_authorizable.git
+
+Your going to need ActiveRecord 2.1 or greater.
 
 ==Usage
 
@@ -84,7 +86,7 @@ The permission parameter is a black box. It can be anything because ActsAsAuthor
     belongs_to :forum
     belongs_to :user
     
-    auth_belongs_to_user :user, :role => Role.find_by_name('Post Owner')
+    auth_belongs_to_user :user, :role => 'Post Owner'
     auth_belongs_to_parent :thread
   end
   
@@ -102,27 +104,71 @@ Note: models are searched in depth first order, with the order within a model de
 
 ====acts_as_authorized
 
-This is included in ActiveRecord models that are part of the authorization graph. If you use any of the other class methods this needs to be included in your class definition.
+This is included in ActiveRecord models that are part of the authorization graph. If you use any of the other class methods this needs to be included in your class definition. It takes two optional parameters
+
+- :role_class_name => A string representing the Role class name. Defaults to 'Role'
+- :role_locate_method => A string representing a method on the Role class that is used to find roles. Defaults to 'find_by_name'.
+
+Example:
+  
+  acts_as_authorized :role_class_name => 'Role', :role_locate_method => 'find_by_name'
 
 ====auth_belongs_to_user
 
 This method takes several options...
 
-- :association: What association to use to fetch the user instance, defaults to :user
-- :role_association: What association defines the role for the corresponding user instance
-- :role: What the user instance should be treated as assuming the :role_association option is not defined
+- association REQUIRED, What association to use to fetch the user instance, defaults to :user
+- :role_association => What association defines the role for the corresponding user instance
+- :role => What the user instance should be treated as assuming the :role_association option is not defined. Passed as a parameter to the role_locate_method.
 
-====auth_belongs_to_parent
+Example:
+  
+  #Association
+  belongs_to :user
+  #Auth Piggyback using a set role
+  auth_belongs_to_user, :user, :role => 'Grand Poo Bah'
+  
+Or:
 
-This method requires an association option
+  #Association
+  belongs_to :user
+  belongs_to :role
+  #Auth Piggyback using an associated role
+  auth_belongs_to_user, :user, :role_association => :role
+  
 
-- :association
+====auth_belongs_to_parent & auth_has_one_parent
 
+- association REQUIRED, What association to follow.
 
-More Coming shortly...
+Example:
+  
+  #Association
+  belongs_to :forum
+  #Auth Piggyback
+  auth_belongs_to_parent :forum
 
+====auth_has_many_parents
 
+- association REQUIRED, What association to follow.
+- :user_scope => A symbol representing a named_scope that takes in a user object to condition the association. It is recommended that you use this for performance reasons.
 
+Example:
+
+  #In Membership class
+  named_scope :with_user, lambda { |user| {:conditions => {:user_id => user}}}
+  #Association
+  has_many :memberships
+  #Auth Piggyback
+  auth_has_many_parents :memberships, :user_scope => :with_user
+
+===Instance Methods
+
+Into every acts_as_authorizable model one instance method is injected called authorized?(user_instance,permission)
+
+===Advanced
+
+You can have circular authorization dependencies. They will not result in infinite loops because the plugin colors the authorization graph while it searches for new permissions. Performance of the plugin is highly dependent on how you use it. Putting the obvious belongs_to_user permissions lexically first will result in better performance. Minimizing the number of auth_parents is also a good way of ensuring higher performance. The queries that result from the authorization plugins work are based on the associations passed. Hence ActiveRecords caching will work just fine as well.
 
 
 
